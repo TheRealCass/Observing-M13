@@ -1,19 +1,7 @@
-#ASTR 3070 Data Reduction
-##########################################################################################################################
 #for math
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
 
-import astropy.units as u
-from astropy.visualization import simple_norm
-from astropy.wcs import WCS
-from astropy.coordinates import angular_separation, Angle, SkyCoord
-from astropy.wcs.utils import proj_plane_pixel_scales
-from astropy.stats import sigma_clipped_stats
-from astropy.coordinates import SkyCoord
 from astropy.io import fits
-from astropy.nddata import Cutout2D
 
 # for directory
 import os
@@ -21,21 +9,9 @@ import os
 # fo rallighining
 import astroalign as align
 
-# twirl
-from twirl import find_peaks
-from twirl import gaia_radecs
-from twirl.geometry import sparsify
-from twirl import compute_wcs
 
-# to manupulate photos
-from photutils.aperture import SkyCircularAperture
-from photutils.detection import DAOStarFinder
-from pylab import figure, cm
-
-import pandas as pd
-
-
-
+#ASTR 3070 Data Reduction
+##########################################################################################################################
 
 #Make a function to get the filenames so then I can open the fits files.
 
