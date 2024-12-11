@@ -8,6 +8,7 @@ import os
 
 # fo rallighining
 import astroalign as align
+import random
 
 
 #ASTR 3070 Data Reduction
@@ -71,9 +72,6 @@ def make_header_data_lists(light, dark, norm_flats_bias):
 
 
 
-#Do astroalign and then use astroquery to get RA and DEC
-
-
 def align_image(list_of_images, reference_image):
 
  
@@ -90,6 +88,8 @@ def align_image(list_of_images, reference_image):
     Master_image=Master_image/count
 
     return Master_image
+
+
 
 
 

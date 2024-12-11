@@ -100,95 +100,123 @@ master_light_1B = helper.correct_lights(light1B_files, master_dark, master_flat_
 master_light_1R = helper.correct_lights(light1R_files, master_dark, master_flat_1R)
 master_light_2B = helper.correct_lights(light2B_files, master_dark, master_flat_2B)
 master_light_2R = helper.correct_lights(light2R_files, master_dark, master_flat_2R)
-# Choose a reference image
-#get a random image from all the light images to use as reference image
-random_number = random.randint(1,4)
 
-if (random_number == 0): 
+
+# pick a random day
+random_number = random.randint(1,2)
+
+if (random_number == 1): 
 
     random_file_index = random.randint(0,len(light1B_files)-1)
-    ref_img = fits.open(light1B_files[random_file_index])
+    ref_img_for_b_filter = fits.open(light1B_files[random_file_index])
 
-elif (random_number == 2):
+else:
     
-    random_file_index = random.randint(0,len(light1R_files)-1)
-    ref_img = fits.open(light1R_files[random_file_index])
-
-elif (random_number == 3):
- 
     random_file_index = random.randint(0,len(light2B_files)-1)
-    ref_img = fits.open(light1B_files[random_file_index])
+    ref_img_for_b_filter = fits.open(light2B_files[random_file_index])
+
+
+
+if (random_number == 1):
+ 
+    random_file_index = random.randint(0,len(light1R_files)-1)
+    ref_img_for_r_filter = fits.open(light1R_files[random_file_index])
 
 else:
 
     random_file_index = random.randint(0,len(light2R_files)-1)
-    ref_img = fits.open(light1R_files[random_file_index])
+    ref_img_for_r_filter = fits.open(light2R_files[random_file_index])
 
-# Get the data off the reference image
+
 #get the header and the actual image from the choosen reference image
-ref_header   = ref_img[0].header # this header will be stamped on any fits I make
-ref_data     = ref_img[0].data   # this is be use for allighining light frames
-# Alighn light frame from each filters
+#get the header and the actual image from the choosen reference image
+ref_header_b_filter   = ref_img_for_b_filter[0].header # this header will be stamped on any fits I make
+ref_header_r_filter   = ref_img_for_r_filter[0].header # this header will be stamped on any fits I make
+
+ref_data_b_filter     = ref_img_for_b_filter[0].data   # this is be use for allighining light frames
+ref_data_r_filter     = ref_img_for_r_filter[0].data   # this is be use for allighining light frames
+
 # make a list of all the B and R filter of the lights 
 b_filter_lights = master_light_1B + master_light_2B
 r_filter_lights = master_light_1R + master_light_2R
 
 # alligh the lights using that random image we picked
-master_Bfilter_light = helper.align_image(b_filter_lights, ref_data)
-master_Rfilter_light = helper.align_image(r_filter_lights, ref_data)
+master_Bfilter_light = align_image(b_filter_lights, ref_data_b_filter)
+master_Rfilter_light = align_image(r_filter_lights, ref_data_r_filter)
 
 # create the fits file to work with
-b_filter_fits = fits.PrimaryHDU(master_Bfilter_light, ref_header)
-r_filter_fits = fits.PrimaryHDU(master_Rfilter_light, ref_header)
+b_filter_fits = fits.PrimaryHDU(master_Bfilter_light, ref_header_b_filter)
+r_filter_fits = fits.PrimaryHDU(master_Rfilter_light, ref_header_r_filter)
+
+# Find the peak locations in the blue and red filter images
+peak_location_b_filter = find_peaks(b_filter_fits.data)
+peak_location_r_filter = find_peaks(r_filter_fits.data)
 
 
-# Let's define a small subsection
-# Define the crop dimensions
-crop_x_start = 2300
-crop_x_end = 2700
-crop_y_start = 1000
-crop_y_end = 1400
+# Define the World Coordinate System (WCS) from the blue filter image header
+true_wcs_b_filter = WCS(b_filter_fits.header)
+true_wcs_r_filter = WCS(r_filter_fits.header)
 
-# Calculate the width and height based on crop dimensions
-crop_width = crop_x_end - crop_x_start
-crop_height = crop_y_end - crop_y_start
+# Calculate the field of view (FoV) for the blue filter image
+fov_b_filter = (b_filter_fits.data.shape * proj_plane_pixel_scales(true_wcs_b_filter))[0]
+fov_r_filter = (r_filter_fits.data.shape * proj_plane_pixel_scales(true_wcs_r_filter))[0]
 
 
-# Cut out the small subsection
-# Crop the images based on the defined dimensions
-cropped_b_filter_img = b_filter_fits.data[crop_y_start:crop_y_end, crop_x_start:crop_x_end]
-cropped_r_filter_img = r_filter_fits.data[crop_y_start:crop_y_end, crop_x_start:crop_x_end]
+# Calculate statistics (mean, median, and standard deviation) for blue and red filter images
+b_mean, b_median, b_std = sigma_clipped_stats(b_filter_fits.data, sigma = 3.0)
+r_mean, r_median, r_std = sigma_clipped_stats(r_filter_fits.data, sigma = 3.0)
+
+####### DAY 2 ########################
+
+# Get RA and DEC coordinates from Gaia catalog within a radius
+all_radecs_b_filter = gaia_radecs((b_filter_fits.header['RA'], b_filter_fits.header['DEC']), 1.2 * 0.65)
+all_radecs_r_filter = gaia_radecs((r_filter_fits.header['RA'], r_filter_fits.header['DEC']), 1.2 * 0.65)
+
+# we only keep stars 0.01 degree apart from each other
+all_radecs_b_filter = sparsify(all_radecs_b_filter, 0.01)
+all_radecs_r_filter = sparsify(all_radecs_r_filter, 0.01)
 
 
-# Find the stats of the cropped images
-# Calculate statistics (mean, median, and standard deviation) for the subsets of blue and red filter data
-_, b_median, b_std = sigma_clipped_stats(cropped_b_filter_img, sigma = 3.0)
-_, r_median, r_std = sigma_clipped_stats(cropped_r_filter_img, sigma = 3.0)
+# Compute the WCS transformation using the peak locations and RA/DEC coordinates
+wcs_b_filter = compute_wcs(peak_location_b_filter, all_radecs_b_filter[0:30], tolerance = 10)
+wcs_r_filter = compute_wcs(peak_location_r_filter, all_radecs_r_filter[0:30], tolerance = 10)
 
-# Use stats in DAOStarFinder to locate sources
-# initialise DAO Star Finder. Use the stats to find a suatitable thrushold
-finder_for_b_filter = DAOStarFinder(fwhm = 5.0, threshold = 3.*b_std)
-finder_for_r_filter = DAOStarFinder(fwhm = 5.0, threshold = 3.*r_std)
+# Update the blue & red filter image header with the new WCS information
+b_filter_fits.header.update(wcs_b_filter.to_header())
+r_filter_fits.header.update(wcs_r_filter.to_header())
 
-# make a background-subtracted image.
-no_background_b_filter_img = cropped_b_filter_img - b_median
-no_background_r_filter_img = cropped_r_filter_img - r_median
+# Normalize the blue & red filter image data
+b_filter_fits.data = b_filter_fits.data / (16 * 120.0)
+r_filter_fits.data = r_filter_fits.data / (16 * 120.0)
 
-# run DAO star finder to find sources in B & R filter images that have been cropped
-# DAOStarFinder returns a table with properties it found of each star it detected
-b_filter_sources = finder_for_b_filter(no_background_b_filter_img)
-r_filter_sources = finder_for_r_filter(no_background_r_filter_img)
+# locate the place you wanna save the fits files
+output_directory_b_filter = DIRECTORY + "Light_B.fits"
+output_directory_r_filter = DIRECTORY + "Light_R.fits"
 
+# write the files to drive
+b_filter_fits.writeto(output_directory_b_filter, overwrite=True)
+b_filter_fits.writeto(output_directory_r_filter, overwrite=True)
 
-# Let's take a look at what we found
-# get the name of the colums that store the x and y position of the detected stars
+# Get the co-orditane of M2 stars and their brightness from Database
+# load the data from memory
+coords = pd.read_csv("NGC7089.pos", sep='[ ]{2,}', engine='python')
+mags = pd.read_csv("NGC7089.pho", sep='[ ]{1,}', engine='python')
 
-#print the table to find the col names of interst
+# add coloum names to the coordinate file
+coords.rename(columns={'323.36209232807' : 'RA', '-00.84555554920' : 'DEC'}, inplace=True)
+coords.DEC = coords.DEC.str.replace(" ", "")
+coords.DEC = coords.DEC.astype(float)
+# Join the 2 tables using the "Reference" column as point of commonality
+stetson = pd.merge( coords[["Reference", 'RA', 'DEC']], mags, how = 'inner', on = ['Reference'] )
+# Keep the stars with a magnitude of 18 or brighter (mag < 19)
+stetson = stetson[(stetson.B < 19) & (stetson.R < 19)]
+# Lets see the detected stars from the steton photometric catalog
+stetson_pos_b_filter = np.array(wcs_b_filter.world_to_pixel_values(stetson[["RA", "DEC"]]))
+stetson_pos_r_filter = np.array(wcs_r_filter.world_to_pixel_values(stetson[["RA", "DEC"]]))
 
-
-
-
-
-
-
-
+ax = plt.subplot(projection = wcs_b_filter)
+ax.imshow(b_filter_fits.data, vmin = b_median, vmax = 3 * b_median, cmap = BLUE_FILTER_COLOR )
+_ = CircularAperture(stetson_pos_b_filter, 20).plot(color="g", alpha=0.5)
+ax = plt.subplot(projection = wcs_r_filter)
+ax.imshow(r_filter_fits.data, vmin = b_median, vmax = 3 * b_median, cmap = RED_FILTER_COLOR )
+_ = CircularAperture(stetson_pos_b_filter, 20).plot(color = "g", alpha = 0.5)
