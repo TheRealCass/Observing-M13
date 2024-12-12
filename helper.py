@@ -28,7 +28,7 @@ def get_filename(directory):
 
 
 
-def make_master(file_list):
+def stack_frames(file_list):
     '''
     This takes a list of filenames
     Loads the data, averages all the images together
