@@ -43,18 +43,14 @@ RED_FILTER_COLOR =  cm.grey
 DIRECTORY="m2/"
 # DIRECTORY="m13/"
 # Gather all the files
-#Get the file directory
-
 # Define the directories where the FITS files are stored
 directory_b_filter = DIRECTORY + "Light_B.fits"
 
 # Load the FITS files into variables
 b_filter_fits = fits.open(directory_b_filter)
 b_filter_fits = b_filter_fits[0]
-
 # Use twirl to find peaks
 peak_location_b_filter = find_peaks(b_filter_fits.data)[0:20]
-
 # Obtain and filter RA/DEC coordinates from the Gaia catalog
 b_filter_center     = (b_filter_fits.header['RA'], b_filter_fits.header['DEC']) 
 fov_b_filter        = 1.2 * 0.65
@@ -64,8 +60,7 @@ all_radecs_b_filter = sparsify(all_radecs_b_filter, thrushold)
 
 # Compute WCS coordinates
 # we only keep the 12 brightest stars from gaia
-wcs_b_filter = compute_wcs(peak_location_b_filter, all_radecs_b_filter[0:30], tolerance = 10)
-
+wcs_b_filter = compute_wcs(peak_location_b_filter, all_radecs_b_filter[0:20], tolerance = 10)
 # Update Header for the lights with the new WCS
 b_filter_fits.header.update(wcs_b_filter.to_header())
 # Normalize the lights
@@ -91,7 +86,7 @@ coords['DEC'] = coords['DEC'].astype(float)
 stetson = pd.merge(coords[["Reference", 'RA', 'DEC']], mags[["Reference", 'B', 'sigma.1', 'R', 'sigma.3']], how='inner', on=['Reference'])
 
 # Filter the stars with magnitude of 18 or brighter
-stetson = stetson[(stetson.B < 19) & (stetson.R < 19)]
+stetson = stetson[(stetson.B < 23) & (stetson.R < 23)]
 
 # Lets plot what we extracted
 stetson_pos_b_filter = np.array(wcs_b_filter.world_to_pixel_values( stetson[["RA", "DEC"]] ))
@@ -116,20 +111,20 @@ b_filter_analysis.header.update(cutout_b_filter.wcs.to_header())
 # Use TWIRL to compute WCS for the cutout
 #compute wcs for this cutout
 peaks_b_filter = find_peaks(b_filter_analysis.data)[0:20]
-wcs_cutout_b_filter = compute_wcs(peaks_b_filter, all_radecs_b_filter[0:30], tolerance = 10)
+wcs_cutout_b_filter = compute_wcs(peaks_b_filter, all_radecs_b_filter[0:20], tolerance = 10)
 stetson_pos_b_filter = np.array(wcs_cutout_b_filter.world_to_pixel_values(stetson[["RA", "DEC"]]))
 
 # Find peaks using DAO Star Finder
 mean, median, std = sigma_clipped_stats(b_filter_analysis.data, sigma = 3.0)
 
-daofind = DAOStarFinder(fwhm = 7.0, threshold = 5.*std)
+daofind = DAOStarFinder(fwhm = 5.0, threshold = 2 *std)
 sources = daofind(b_filter_analysis.data - median)
 for col in sources.colnames:  
     if col not in ('id', 'npix'):
         sources[col].info.format = '%.2f'  # for consistent table output
 # Lets convert the DAOStarFinder results into a pandas table & get what we need
 detected_stars      = sources.to_pandas()
-detected_stars      = detected_stars[(detected_stars.flux > 0.79)] # Get rid of anything fainter than 0.79 mag
+detected_stars      = detected_stars[(detected_stars.flux > .60)] # Get rid of anything fainter than 0.79 mag
 detected_locaions   = np.transpose((detected_stars['xcentroid'], detected_stars['ycentroid'])) # pandas object backt o numpy array
 
 #  Overlay the Stetson star locations & DAO Star Finder peak locations on the cutout
@@ -142,7 +137,7 @@ ax1.set_title('Peaks found using TWIRL in B filter cutout')
 # Adjust layout for better spacing
 plt.tight_layout()
 plt.show()
-plt.savefig(DIRECTORY + "TWIRL peaks in curout.jpg")
+plt.savefig(DIRECTORY + "Stetson(g) and Detected(m) stars.jpg")
 plt.clf()
 # Add the detected coordinates from TWIRL into the to the DAOStarFinder results
 #get RA and DEC in degrees (SkyCoord Object) in the detected steson stars
@@ -162,12 +157,14 @@ coordinates_matched = coordinates_detected[sep_constraint]
 catalog_matches = coordinates_stetson[idx[sep_constraint]]
 detected_stars['coords'] = coordinates_detected
 
+
+# Make the CMD
 # Get X axis
 detected_and_matched_stars_mag = []
 for i in detected_stars.index:
     for j in range(0,len(coordinates_matched)):
         if detected_stars.coords[i] == coordinates_matched[j]:
-            detected_and_matched_stars_mag.append(detected_stars.daofind_mag[i])
+            detected_and_matched_stars_mag.append(detected_stars.mag[i])
 
 stetson_and_matched_stars_r_band = []
 for i in stetson.index:
@@ -182,16 +179,19 @@ for i in stetson.index:
         if(stetson.sky[i] == catalog_matches[j]):
             apparent_mag.append(stetson.B[i])
 
-# Assuming stetson_and_matched_stars_r_band and detected_and_matched_stars_mag are lists
+
 stetson_and_matched_stars_r_band = np.array(stetson_and_matched_stars_r_band)
 detected_and_matched_stars_mag = np.array(detected_and_matched_stars_mag)
+apparent_mag = np.array(apparent_mag)
 
-# Now you can subtract these arrays
-difference = stetson_and_matched_stars_r_band - detected_and_matched_stars_mag
+fudge_factor = 0 * np.std(detected_and_matched_stars_mag)
+difference = stetson_and_matched_stars_r_band - (detected_and_matched_stars_mag + fudge_factor)
 
-# Assuming apparent_mag is already defined and is not a list
 plt.scatter(difference, apparent_mag)
-plt.xlabel('Difference (Stetson - Detected)')
+plt.xlabel('Difference (Stetson R Band - Detected B Band)')
 plt.ylabel('Apparent Magnitude')
-plt.title('Star Magnitude Comparison')
+plt.title('Colour Magnitude Diagram')
+plt.grid(True, which="both", ls="--")  # Grid for both major and minor ticks
+plt.savefig(DIRECTORY + "CMD.jpg")
 plt.show()
+plt.clf()
