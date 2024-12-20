@@ -1,6 +1,7 @@
 # Seeking Globular Clusters: M2 and Future Observations
 
 This repository contains the data analysis pipeline and the resulting data for the research paper titled "Seeking Globular Clusters: M2 and Future Observations." The study involves detailed observations of the Messier 2 (M2) globular cluster using customized Python scripts to process raw images and derive significant results.
+Globular clusters are densely packed groups of stars that provide significant insights into stellar evolution. This study focuses on the globular cluster Messier 2 (M2), aiming to construct a Hertzsprung-Russell (H-R) diagram and estimate the cluster's age. Our ultimate goal is to observe Messier 13 (M13); observing M2 serves as a preliminary step to ensure our data reduction methods work perfectly.
 
 ## Table of Contents
 
